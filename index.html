@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        
+        <meta charset="UTF-8">
+        <script src="https://d3js.org/d3.v6.min.js"></script>   
+
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Raleway&display=swap" rel="stylesheet"> 
+
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/skeleton/2.0.4/skeleton.min.css" integrity="sha512-EZLkOqwILORob+p0BXZc+Vm3RgJBOe1Iq/0fiI7r/wJgzOFZMlsqTa29UEl6v6U6gsV4uIpsNZoV32YZqrCRCQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+        <style>
+            header {
+                text-align: center;
+            }
+
+            #dropdown {
+                position: relative;
+                top: -5px;
+            }
+
+            footer {
+                text-align: right;
+            }
+
+            .tick > text {
+                font-size: 1.5em;
+                font-family: Raleway,HelveticaNeue,"Helvetica Neue",Helvetica,Arial,sans-serif;
+                cursor: help;
+            }
+
+            #tooltip {
+                background: ghostwhite;
+                border: solid;
+                border-width: 1px;
+                border-radius: 3px;
+                padding: 5px 10px;
+
+                position: absolute;
+                visibility: hidden;
+            }
+
+        .pride {
+            /* Pride special */
+            background: linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        footer h6 {
+            width: fit-content;
+            position: absolute;
+            right: 0;
+        }
+        </style>
+    </head>
+
+    <body class="container">
+
+        <header class="row">
+            <h3><br>Scammers, Perverts, and Siao Langs:<br>Number of major crimes commited in Singapore in 
+            <select id="dropdown">
+            </select>
+            </h3>
+        </header> 
+        <section id="chart" class="row"></section>
+        <footer class="row"><br>🌈<h6 class="pride"> Data from <a href="https://data.gov.sg/">data.gov.sg</a></h6></footer>
+
+        <div id="tooltip">tips</div>
+
+        <script>  
+
+            // Fetch data from API
+            async function fetchData (url = "", data = {}) {
+                let queryString = "";
+
+                // Prepare query string with query
+                if (data.hasOwnProperty("q")) {
+                    let dataWithoutQuery = JSON.parse(JSON.stringify(data));
+                    delete dataWithoutQuery.q;
+
+                    queryString = 
+                        new URLSearchParams(dataWithoutQuery).toString() 
+                        + "&q=" 
+                        + JSON.stringify(data["q"]);
+                
+                // Prepare query string without query
+                } else {
+                    queryString = new URLSearchParams(data).toString();
+                }
+                
+                url = url + "?" + queryString
+                console.log(url);
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                });
+
+                return response.json();
+            }
+
+            var maxVal = 0;
+            var yTicks;
+            // create a tooltip
+            var tooltip = d3.select("#tooltip");
+
+            // Draw graph
+            function drawGraph(data) {
+
+                maxVal = Math.max(...(data.map(function(d){return d.value})));
+                maxVal = Math.round(maxVal / 1000) * 1000;
+
+                var xAxisTicks = maxVal / 1000 / 2;
+
+                // set the dimensions and margins of the graph
+                var margin = {top: 20, right: 30, bottom: 50, left: 200},
+                    width = 960 - margin.left - margin.right,
+                    height = 600 - margin.top - margin.bottom;
+
+                // append the svg object to the body of the page
+                var svg = d3.select("#chart")
+                    .append("svg")
+                        // .attr("width", width + margin.left + margin.right)
+                        // .attr("height", height + margin.top + margin.bottom)
+                        .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+                        // .attr("class", "one-half column")
+                    .append("g")
+                        .attr("transform",
+                            "translate(" + margin.left + "," + margin.top + ")");
+
+                // Add X axis
+                var x = d3.scaleLinear()
+                    .domain([0, maxVal])
+                    .range([0, width]);
+
+                svg.append("g")
+                    .attr("transform", "translate(0," + height + ")")
+                    .call(d3.axisBottom(x).ticks(xAxisTicks))
+                    .selectAll("text")
+                    .attr("transform", "translate(-10,0)rotate(-45)")
+                    .style("text-anchor", "end");
+
+                // Y axis
+                var y = d3.scaleBand()
+                    .range([ 0, height ])
+                    .domain(data.map(function(d) { return d.crime; }))
+                    .padding(.1);
+
+                yTicks = svg.append("g")
+                    .call(d3.axisLeft(y))
+                    .selectAll("text");
+
+                //Bars
+                svg.selectAll("myRect")
+                    .data(data)
+                    .enter()
+                    .append("rect")
+                    .attr("x", 1)
+                    .attr("y", function(d) { return y(d.crime); })
+                    .attr("width", function(d) { return x(d.value); })
+                    .attr("height", y.bandwidth() )
+                    .attr("fill", "#69b3a2")
+                    .attr("stroke", "black");
+
+
+                //
+                yTicks
+                    .on("mouseover", function(){return tooltip.style("visibility", "visible");})
+                    .on("mousemove", function(_, d) {
+
+                        let value = 0;
+
+                        data.forEach(function(a, _) {
+                            if (a.crime == d) {
+                                value = a.value;
+                            }
+                        });
+                        
+                        tooltip
+                            .style("top", (event.pageY - 30)+"px").style("left",(event.pageX - 450)+"px")
+                            .html(`${value.toLocaleString("en-GB")} cases`);
+                    })
+                    .on("mouseout", function(){return tooltip.style("visibility", "hidden");});
+            }
+
+            // Go
+            fetchData("https://data.gov.sg/api/action/datastore_search", { 
+                resource_id: '83c21090-bd19-4b54-ab6b-d999c251edcf',
+                q: {"year": "2020"}
+
+            }).then(function(data) {
+                let dat = (data.result.records).map(function(d) { return {crime: d.level_2, value: d.value}; });
+
+                dat.sort(function(a, b) { return a.value - b.value });
+                
+                drawGraph(dat);
+
+                console.log("done", dat);
+            });
+
+            
+            function update(data) {
+                    // set the dimensions and margins of the graph
+                    var margin = {top: 20, right: 30, bottom: 50, left: 200},
+                    width = 960 - margin.left - margin.right,
+                    height = 600 - margin.top - margin.bottom;
+
+                // var maxVal = Math.max(...(data.map(function(d){return d.value})));
+                // maxVal = Math.round(maxVal / 1000) * 1000;
+
+                // var xAxisTicks = maxVal / 1000 / 2;
+                // Add X axis
+                var x = d3.scaleLinear()
+                    .domain([0, maxVal])
+                    .range([0, width]);
+
+                // svg.append("g")
+                //     .attr("transform", "translate(0," + height + ")")
+                //     .call(d3.axisBottom(x).ticks(xAxisTicks))
+                //     .selectAll("text")
+                //     .attr("transform", "translate(-10,0)rotate(-45)")
+                //     .style("text-anchor", "end");
+
+                
+
+                // Y axis
+                var y = d3.scaleBand()
+                    .range([ 0, height ])
+                    .domain(data.map(function(d) { return d.crime; }))
+                    .padding(.1);
+
+
+                // yScale.domain([0,Math.floor((Math.random()*90)+11)])  
+                // vis.select(".yaxis")
+                //     .transition().duration(1500).ease("sin-in-out")  // https://github.com/mbostock/d3/wiki/Transitions#wiki-d3_ease
+                //     .call(yAxis);  
+
+                var u = d3.select("svg").selectAll("rect")
+                    .data(data)
+
+                u
+                    .enter()
+                    .append("rect")
+                    .merge(u)
+                    .transition()
+                    .duration(1000)
+                    .attr("x", 1)
+                    .attr("y", function(d) { return y(d.crime); })
+                    .attr("width", function(d) { return x(d.value); })
+                    .attr("height", y.bandwidth() )
+                    .attr("fill", "#69b3a2")
+
+                yTicks
+                    .on("mouseover", function(){return tooltip.style("visibility", "visible");})
+                    .on("mousemove", function(_, d) {
+
+                        let value = 0;
+
+                        data.forEach(function(a, _) {
+                            if (a.crime == d) {
+                                value = a.value;
+                            }
+                        });
+                        
+                        tooltip
+                            .style("top", (event.pageY - 30)+"px").style("left",(event.pageX - 450)+"px")
+                            .html(`${value.toLocaleString("en-GB")} cases`);
+                    })
+                    .on("mouseout", function(){return tooltip.style("visibility", "hidden");});
+            }
+
+            fetchData("https://data.gov.sg/api/action/datastore_search", { 
+                resource_id: '83c21090-bd19-4b54-ab6b-d999c251edcf',
+                limit: 999
+
+            }).then(function(data) {
+                let dat = (data.result.records)
+                    .map(function(d) { return (d.year) })
+                    .sort(function(a, b) { return b - a })
+                    .filter(function(e, i, a) { return a.indexOf(e) == i });
+
+                // HAHA what a strange use of d3
+                d3.select("#dropdown")
+                    .selectAll("option")
+                    .data(dat)
+                    .enter()
+                    .append("option")
+                    .attr("value", d => d)
+                    .html(d => d);
+                
+                console.log("done", dat);
+                
+                var sel = document.getElementById("dropdown");
+            
+                sel.addEventListener("change", function(e) {
+                    console.log(sel.options[sel.selectedIndex].value)
+
+                    // Go
+                    fetchData("https://data.gov.sg/api/action/datastore_search", { 
+                        resource_id: '83c21090-bd19-4b54-ab6b-d999c251edcf',
+                        q: {"year": sel.options[sel.selectedIndex].value}
+
+                    }).then(function(data) {
+                        let dat = (data.result.records).map(function(d) { return {crime: d.level_2, value: d.value}; });
+
+                        dat.sort(function(a, b) { return a.value - b.value });
+                        
+                        update(dat);
+
+                        console.log("done", dat);
+                    });
+                })
+            });
+
+            
+
+
+        
+        </script>
+    </body>
+</html>
